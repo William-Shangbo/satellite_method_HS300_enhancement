@@ -1,0 +1,23 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+dist/
+build/
+
+# Local data and generated research outputs are intentionally excluded.
+data/
+artifacts/
+*.parquet
+*.feather
+*.h5
+*.hdf5
+
+# Local secrets
+.env
+*.token

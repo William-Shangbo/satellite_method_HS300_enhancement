@@ -1,0 +1,266 @@
+version: 1
+pipeline: index_enforcement_platform
+provider: tushare_pro
+endpoint: https://api.tushare.pro
+auth:
+  env_var: TUSHARE_TOKEN
+benchmark_index: 399300.SZ
+
+datasets:
+  - dataset: security_master
+    api_name: stock_basic
+    required: true
+    layer: dim
+    target_table: dim_security
+    refresh: weekly
+    purpose: universe definition, listed status, delisted history
+    primary_key:
+      - ts_code
+    pull_strategy:
+      notes: pull list_status=L,D,P separately and union
+    fields:
+      - ts_code
+      - symbol
+      - name
+      - area
+      - industry
+      - market
+      - exchange
+      - list_status
+      - list_date
+      - delist_date
+
+  - dataset: trade_calendar
+    api_name: trade_cal
+    required: true
+    layer: dim
+    target_table: dim_trade_calendar
+    refresh: monthly
+    purpose: trading-day alignment, rebalance schedule, forward return shift
+    primary_key:
+      - exchange
+      - cal_date
+    params:
+      exchange: SSE
+    fields:
+      - exchange
+      - cal_date
+      - is_open
+      - pretrade_date
+
+  - dataset: daily_bar
+    api_name: daily
+    required: true
+    layer: ods
+    target_table: ods_tushare_daily
+    refresh: daily
+    purpose: OHLCV, raw returns, liquidity features
+    primary_key:
+      - ts_code
+      - trade_date
+    partition_key: trade_date
+    fields:
+      - ts_code
+      - trade_date
+      - open
+      - high
+      - low
+      - close
+      - pre_close
+      - change
+      - pct_chg
+      - vol
+      - amount
+
+  - dataset: adjustment_factor
+    api_name: adj_factor
+    required: true
+    layer: ods
+    target_table: ods_tushare_adj_factor
+    refresh: daily
+    purpose: forward-adjusted close and return series
+    primary_key:
+      - ts_code
+      - trade_date
+    partition_key: trade_date
+    fields:
+      - ts_code
+      - trade_date
+      - adj_factor
+
+  - dataset: daily_basic
+    api_name: daily_basic
+    required: true
+    layer: ods
+    target_table: ods_tushare_daily_basic
+    refresh: daily
+    purpose: valuation, turnover, float market cap, dividend metrics
+    primary_key:
+      - ts_code
+      - trade_date
+    partition_key: trade_date
+    fields:
+      - ts_code
+      - trade_date
+      - turnover_rate
+      - turnover_rate_f
+      - volume_ratio
+      - pe
+      - pe_ttm
+      - pb
+      - ps
+      - ps_ttm
+      - dv_ratio
+      - dv_ttm
+      - total_share
+      - float_share
+      - free_share
+      - total_mv
+      - circ_mv
+
+  - dataset: benchmark_weight
+    api_name: index_weight
+    required: true
+    layer: ods
+    target_table: ods_tushare_index_weight
+    refresh: monthly
+    purpose: CSI 300 constituent membership and benchmark weights
+    primary_key:
+      - index_code
+      - trade_date
+      - con_code
+    params:
+      index_code: 399300.SZ
+    pull_strategy:
+      notes: query by calendar month because Tushare serves monthly snapshots
+    fields:
+      - index_code
+      - con_code
+      - trade_date
+      - weight
+
+  - dataset: income_statement
+    api_name: income
+    required: true
+    layer: ods
+    target_table: ods_tushare_income
+    refresh: quarterly
+    purpose: revenue, profit, growth factor inputs
+    primary_key:
+      - ts_code
+      - ann_date
+      - end_date
+      - report_type
+    partition_key: ann_date
+    fields_hint:
+      - ts_code
+      - ann_date
+      - end_date
+      - report_type
+      - total_revenue
+      - revenue
+      - operate_profit
+      - n_income
+      - n_income_attr_p
+
+  - dataset: balance_sheet
+    api_name: balancesheet
+    required: true
+    layer: ods
+    target_table: ods_tushare_balancesheet
+    refresh: quarterly
+    purpose: leverage, asset quality, investment intensity
+    primary_key:
+      - ts_code
+      - ann_date
+      - end_date
+      - report_type
+    partition_key: ann_date
+    fields_hint:
+      - ts_code
+      - ann_date
+      - end_date
+      - report_type
+      - total_assets
+      - total_hldr_eqy_exc_min_int
+      - total_liab
+      - money_cap
+      - inventories
+
+  - dataset: cashflow_statement
+    api_name: cashflow
+    required: true
+    layer: ods
+    target_table: ods_tushare_cashflow
+    refresh: quarterly
+    purpose: operating cashflow quality and accrual signals
+    primary_key:
+      - ts_code
+      - ann_date
+      - end_date
+      - report_type
+    partition_key: ann_date
+    fields_hint:
+      - ts_code
+      - ann_date
+      - end_date
+      - report_type
+      - n_cashflow_act
+      - stot_cash_in_fnc_act
+      - stot_cashout_fnc_act
+
+  - dataset: financial_indicator
+    api_name: fina_indicator
+    required: true
+    layer: ods
+    target_table: ods_tushare_fina_indicator
+    refresh: quarterly
+    purpose: ROE, margins, growth, quality, efficiency
+    primary_key:
+      - ts_code
+      - ann_date
+      - end_date
+    partition_key: ann_date
+    fields_hint:
+      - ts_code
+      - ann_date
+      - end_date
+      - roe
+      - roe_dt
+      - roa
+      - grossprofit_margin
+      - netprofit_margin
+      - assets_turn
+
+  - dataset: suspension
+    api_name: suspend_d
+    required: false
+    layer: ods
+    target_table: ods_tushare_suspend_d
+    refresh: daily
+    purpose: tradability filter on rebalance and execution dates
+    primary_key:
+      - ts_code
+      - trade_date
+
+  - dataset: limit_status
+    api_name: limit_list
+    required: false
+    layer: ods
+    target_table: ods_tushare_limit_list
+    refresh: daily
+    purpose: exclude names blocked by limit-up or limit-down constraints
+    primary_key:
+      - ts_code
+      - trade_date
+
+  - dataset: name_change
+    api_name: namechange
+    required: false
+    layer: ods
+    target_table: ods_tushare_namechange
+    refresh: monthly
+    purpose: historical ticker and company name lineage
+    primary_key:
+      - ts_code
+      - start_date
